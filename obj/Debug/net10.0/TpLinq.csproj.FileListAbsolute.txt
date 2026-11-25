@@ -13,3 +13,5 @@ D:\ESIEE-IT\Matiere\C# net\TpLinq\obj\Debug\net10.0\TpLinq.pdb
 D:\ESIEE-IT\Matiere\C# net\TpLinq\obj\Debug\net10.0\TpLinq.genruntimeconfig.cache
 D:\ESIEE-IT\Matiere\C# net\TpLinq\obj\Debug\net10.0\ref\TpLinq.dll
 D:\ESIEE-IT\Matiere\C# net\TpLinq\obj\Debug\net10.0\TpLinq.sourcelink.json
+D:\ESIEE-IT\Matiere\C# net\TpLinq\bin\Debug\net10.0\TpLinq.runtimeconfig.dev.json
+D:\ESIEE-IT\Matiere\C# net\TpLinq\obj\Debug\net10.0\TpLinq.csproj.Up2Date
