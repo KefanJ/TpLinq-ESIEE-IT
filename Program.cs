@@ -1,8 +1,20 @@
 ﻿using System.Globalization;
 
+// ============================================================================
+// TP2 C# : Délégués, lambdas et LINQ
+// Règle respectée : à partir de l'exercice 2, aucune boucle ne sert à calculer
+// un résultat (les boucles foreach servent uniquement à l'affichage).
+// ============================================================================
+
+// ============================================================================
+// EXERCICE 0 : Mise en place et lecture des fichiers CSV en LINQ
+// ============================================================================
+Console.WriteLine("===== EXERCICE 0 : Lecture CSV en LINQ =====");
+
+// Transforme une ligne CSV en Note, ou renvoie null si la ligne est invalide
 static Note? Parser(string ligne)
 {
-    var c = ligne.Split(',');
+    var c = ligne.Split(',', StringSplitOptions.TrimEntries);
     if (c.Length != 5) return null;
     if (!double.TryParse(c[3], CultureInfo.InvariantCulture, out var v)) return null;
     if (v < 0 || v > 20) return null;
@@ -10,515 +22,274 @@ static Note? Parser(string ligne)
     return new Note(c[0], c[1], c[2], v, coef);
 }
 
-// 1.
-//var lignes = File.ReadLines("notes.csv").Skip(1).Select(Parser).Where(n => n is not null).ToList();
+// Questions 1 & 2 : Lecture sans boucle de notes.csv avec OfType<Note>()
+// OfType<Note>() écarte les null ET renvoie directement un IEnumerable<Note> (non nullable).
+var notes = File.ReadLines("notes.csv")
+    .Skip(1)
+    .Select(Parser)
+    .OfType<Note>()
+    .ToList();
 
-var notes = File.ReadLines("notes.csv").Skip(1).Select(Parser).OfType<Note>().ToList();
-
+// Question 3 : Lecture de etudiants.csv dans une List<Inscrit>
 var inscrits = File.ReadLines("etudiants.csv")
     .Skip(1)
-    .Select(inscrit =>
+    .Select(ligne =>
     {
-        var elements = inscrit.Split(',');
+        var elements = ligne.Split(',', StringSplitOptions.TrimEntries);
         return new Inscrit(elements[0], elements[1], elements[2]);
     })
     .ToList();
 
-//foreach (var ligne in lignesEtudiants)
-//{
-//    Console.WriteLine(ligne);
-//}
+Console.WriteLine($"Notes valides chargées : {notes.Count} | Inscrits chargés : {inscrits.Count}");
 
-//foreach (var ligne in lignes)
-//{
-//    Console.WriteLine(ligne);
-//}
+// ============================================================================
+// EXERCICE 1 : Délégués et lambdas
+// ============================================================================
+Console.WriteLine("\n===== EXERCICE 1 : Délégués et lambdas =====");
 
-// 1.2 Func,Action, Predicate
+// --- 1.1 Un filtre générique ---
 
-//1
-
+// Question 1 : Implémentation manuelle de Where (seule boucle de calcul autorisée dans le TP)
 static List<Note> Filtrer(List<Note> source, Func<Note, bool> critere)
 {
     var res = new List<Note>();
     foreach (var n in source)
+    {
         if (critere(n)) res.Add(n);
+    }
     return res;
 }
 
-
-
+// Question 2 : Appels avec une méthode nommée et des expressions lambdas
 static bool EstEnAlgo(Note n) => n.Matiere == "Algo";
-Filtrer(notes, EstEnAlgo);
-Filtrer(notes, n => n.Valeur <10);
-Filtrer(notes, n => n.Valeur>=15 && n.Prenom == "Ada") ;
 
-// 3.
-Func<Note, bool> c = n => n.Valeur >= 15;
+var notesAlgoFiltrees = Filtrer(notes, EstEnAlgo);
+var notesSous10Filtrees = Filtrer(notes, n => n.Valeur < 10);
+var notesAda15Plus = Filtrer(notes, n => n.Valeur >= 15 && n.Prenom == "Ada");
+Console.WriteLine($"Filtres (1.1) -> Algo : {notesAlgoFiltrees.Count}, < 10 : {notesSous10Filtrees.Count}, Ada >= 15 : {notesAda15Plus.Count}");
 
+// Question 3 : Stockage explicite dans une variable de type Func<Note, bool>
+// (var c = n => ... ne compile pas car le type de 'n' ne peut pas être inféré sans type cible).
+Func<Note, bool> critere15Plus = n => n.Valeur >= 15;
+Console.WriteLine($"Notes >= 15 (via variable Func) : {Filtrer(notes, critere15Plus).Count}");
 
-//1.2 Func, Action, Predicate
+// --- 1.2 Func, Action, Predicate ---
 
-//1.
+// Question 1 : Déclaration d'un Func<Note, double> et d'un Action<Note>
 Func<Note, double> pointsPonderes = n => n.Valeur * n.Coef;
+Action<Note> afficherNote = n => Console.WriteLine($"  {n.Prenom}. {n.Matiere} {n.Valeur} (pts pondérés : {pointsPonderes(n)})");
 
-//Action<Note> afficherNote = n => Console.WriteLine($"{n.Prenom} . {n.Matiere} . {n.Valeur}");
+Console.WriteLine("Exemple d'affichage via Action<Note> :");
+afficherNote(notes[0]);
 
-// 2.
-static Func<Note, bool> AuDessusDe(double seuil)
+// Question 2 : Méthode fabrique renvoyant une lambda
+static Func<Note, bool> AuDessusDe(double seuil) => n => n.Valeur >= seuil;
+
+var notesAuDessusDe14 = Filtrer(notes, AuDessusDe(14));
+Console.WriteLine($"Notes >= 14 (AuDessusDe) : {notesAuDessusDe14.Count}");
+
+// Question 3 : Tri et suppression sur une COPIE de la liste (pour ne pas altérer 'notes' pour la suite)
+// La comparaison dépassant 3 lignes, elle est extraite dans une méthode nommée conformément aux règles du TP.
+static int ComparerParMatierePuisValeurDesc(Note a, Note b)
 {
-    return n => n.Valeur >= seuil;
+    int cmpMatiere = a.Matiere.CompareTo(b.Matiere);
+    return cmpMatiere != 0 ? cmpMatiere : b.Valeur.CompareTo(a.Valeur);
 }
 
-var noteAuDessusDe = Filtrer(notes, AuDessusDe(14));
-//foreach (var n in noteAuDessusDe)
-//{
-//    Console.WriteLine(n);
-//}
+var copieNotes = new List<Note>(notes);
+copieNotes.Sort(ComparerParMatierePuisValeurDesc);
+int nbSupprimees = copieNotes.RemoveAll(n => n.Matiere == "Reseau");
+Console.WriteLine($"Copie triée et nettoyée : {nbSupprimees} notes de Réseau retirées ({copieNotes.Count} restantes dans la copie).");
 
-// 3.
-notes.Sort((a, b) =>
-{
-    var matiere = a.Matiere.CompareTo(b.Matiere);
+// --- 1.3 La capture de variables (Closure) ---
+// Test commenté : la lambda capture la référence de 'seuil' (affiche 10 puis 6).
+/*
+double seuil = 12;
+Func<Note, bool> admis = n => n.Valeur >= seuil;
+Console.WriteLine($"Admis (seuil 12) : {Filtrer(notes, admis).Count}");
+seuil = 15;
+Console.WriteLine($"Admis (seuil 15) : {Filtrer(notes, admis).Count}");
+*/
 
-    if (matiere != 0)
+// ============================================================================
+// EXERCICE 2 : Premières requêtes (filtrer, projeter, trier, agréger)
+// Note : Les blocs ci-dessous ont été testés et commentés pour garder une
+// sortie console lisible centrée sur la classe Promo (Exercice 5).
+// ============================================================================
+
+/*
+// --- 2.1 Filtrer, projeter, trier ---
+
+// 1. Notes d'Algo triées par valeur décroissante
+var noteAlgo = notes
+    .Where(n => n.Matiere == "Algo")
+    .OrderByDescending(n => n.Valeur)
+    .ToList();
+
+// 2. Liste des matières sans doublon et triée
+var matieresSansDoublon = notes
+    .Select(n => n.Matiere)
+    .Distinct()
+    .Order()
+    .ToList();
+
+// 3. Prénom et valeur des notes < 10 (type anonyme puis tuple)
+var etudiantEnDessousDe10 = notes
+    .Where(n => n.Valeur < 10)
+    .Select(n => new { n.Prenom, n.Valeur })
+    .ToList();
+
+var etudiantEnDessousDe10Tuple = notes
+    .Where(n => n.Valeur < 10)
+    .Select(n => (n.Prenom, n.Valeur))
+    .ToList();
+
+// 4. Classement complet : deux OrderBy successifs écrasent le 1er tri -> correction avec ThenBy
+var classementCompletAvecThen = notes
+    .OrderBy(n => n.Matiere)
+    .ThenByDescending(n => n.Valeur)
+    .ThenBy(n => n.Prenom)
+    .ToList();
+
+// 5. Top 3 puis places 4 à 6 avec Skip et Take
+var troisMeilleuresNotes = notes.OrderByDescending(n => n.Valeur).Take(3).ToList();
+var quatreASixiemeNote = notes.OrderByDescending(n => n.Valeur).Skip(3).Take(3).ToList();
+
+// --- 2.2 Agréger ---
+
+// 1. Nombre total, nombre < 10, moyenne simple (13,77)
+var nbNotes = notes.Count();
+var nbNotesInferDix = notes.Count(n => n.Valeur < 10);
+var moyenneNotes = notes.Average(n => n.Valeur);
+
+// 2. Max (valeur double) vs MaxBy (objet Note complet)
+double meilleureNote = notes.Max(n => n.Valeur);
+Note noteComplete = notes.MaxBy(n => n.Valeur)!;
+
+// 3. Moyenne pondérée globale (13,72)
+double ponderee = notes.Sum(n => n.Valeur * n.Coef) / notes.Sum(n => n.Coef);
+
+// 4. Chaîne des prénoms distincts : Aggregate vs string.Join
+string listeAggregate = notes.Select(n => n.Prenom).Distinct().Aggregate((acc, nom) => acc + ", " + nom);
+string listeAvecJoin = string.Join(", ", notes.Select(n => n.Prenom).Distinct());
+
+// --- 2.3 Chercher et tester ---
+
+// 1. FirstOrDefault (renvoie null pour Linus en BD) vs First (lève InvalidOperationException)
+var noteLinusBd = notes.FirstOrDefault(n => n.Prenom == "Linus" && n.Matiere == "BD");
+
+// 2. Single sur une note unique (Ada en Algo) vs plusieurs notes (Ada toutes matières -> exception)
+var noteAdaAlgo = notes.Single(n => n.Prenom == "Ada" && n.Matiere == "Algo");
+
+// 3. Any, All et All sur une séquence vide (renvoie true par vacuité)
+bool existeSous10 = notes.Any(n => n.Valeur < 10);
+bool tousAuMoins12EnBd = notes.Where(n => n.Matiere == "BD").All(n => n.Valeur >= 12);
+bool allSurVide = Enumerable.Empty<Note>().All(n => n.Valeur >= 12);
+*/
+
+// ============================================================================
+// EXERCICE 3 : Regrouper et joindre (GroupBy, Join, GroupJoin, ToLookup, SelectMany)
+// ============================================================================
+
+/*
+// --- 3.1 GroupBy ---
+
+// 1 & 2. Regroupement et statistiques par matière triées par moyenne décroissante
+var statsParMatiere = notes
+    .GroupBy(n => n.Matiere)
+    .Select(g => new
     {
-        return matiere;
-    }
+        Matiere = g.Key,
+        NbNotes = g.Count(),
+        Moyenne = g.Average(n => n.Valeur),
+        Min = g.Min(n => n.Valeur),
+        Max = g.Max(n => n.Valeur),
+        Major = g.MaxBy(n => n.Valeur)!.Prenom
+    })
+    .OrderByDescending(s => s.Moyenne);
 
-    return b.Valeur.CompareTo(a.Valeur);
+// 3. Dictionnaire Prénom -> Moyenne pondérée via ToDictionary
+Dictionary<string, double> moyennesEtudiants = notes
+    .GroupBy(n => n.Prenom)
+    .ToDictionary(
+        g => g.Key,
+        g => g.Sum(n => n.Valeur * n.Coef) / g.Sum(n => n.Coef)
+    );
+
+// 4. Comptage par étudiant : CountBy vs GroupBy + Count
+var nbNotesCountBy = notes.CountBy(n => n.Prenom);
+var nbNotesGroupBy = notes.GroupBy(n => n.Prenom).Select(g => (Prenom: g.Key, Nb: g.Count()));
+
+// --- 3.2 Join ---
+
+// 1 & 2. Jointure interne sur clé composite (Nom, Prenom) et moyenne par promo
+var releve = notes.Join(
+    inscrits,
+    n => (n.Nom, n.Prenom),
+    i => (i.Nom, i.Prenom),
+    (n, i) => new { i.Prenom, i.Promo, n.Matiere, n.Valeur }
+).ToList();
+
+var moyennesParPromo = releve
+    .GroupBy(r => r.Promo)
+    .Select(g => new { Promo = g.Key, Moyenne = g.Average(r => r.Valeur) });
+
+// 3. Inscrits sans note (Margaret Hamilton) via Where+Any puis GroupJoin
+var sansNoteWhere = inscrits.Where(i => !notes.Any(n => n.Nom == i.Nom && n.Prenom == i.Prenom));
+var sansNoteGroupJoin = inscrits
+    .GroupJoin(notes, i => (i.Nom, i.Prenom), n => (n.Nom, n.Prenom), (i, ns) => new { Inscrit = i, Notes = ns })
+    .Where(x => !x.Notes.Any())
+    .Select(x => x.Inscrit);
+
+// 4. Indexation avec ToLookup (une clé absente renvoie une séquence vide sans exception)
+ILookup<string, Note> indexNotes = notes.ToLookup(n => n.Prenom);
+
+// --- 3.3 SelectMany ---
+
+// 1, 2 & 3. Construction des bulletins, mise à plat avec SelectMany et paires (Prenom, Valeur)
+List<Bulletin> bulletins = notes
+    .GroupBy(n => n.Prenom)
+    .Select(g => new Bulletin(g.Key, g.Select(n => n.Valeur).ToList()))
+    .ToList();
+
+IEnumerable<double> toutesLesValeurs = bulletins.SelectMany(b => b.Valeurs);
+var paires = bulletins.SelectMany(b => b.Valeurs, (bulletin, valeur) => (bulletin.Prenom, valeur));
+*/
+
+// ============================================================================
+// EXERCICE 4 : L'évaluation différée
+// Note : Les effets de bord (Console.WriteLine dans Where) ont été commentés
+// après vérification afin de respecter la grille de rendu du TP.
+// ============================================================================
+
+/*
+// 1. Comparaison entre requête différée (bonnes) et résultat figé en mémoire (ToList)
+var bonnes = notes.Where(n => n.Valeur >= 15);
+Console.WriteLine(bonnes.Count()); // 6
+notes.Add(new Note("Hamilton", "Margaret", "Algo", 19, 3));
+Console.WriteLine(bonnes.Count()); // 7 (réévalué dynamiquement)
+
+var figees = notes.Where(n => n.Valeur >= 15).ToList();
+notes.Add(new Note("Hamilton", "Margaret", "BD", 20, 2));
+Console.WriteLine(bonnes.Count() + " / " + figees.Count); // 8 / 7
+
+// 2 & 3. Effet de bord pour observer la réexécution et le court-circuit de Any()
+var bonnesTrace = notes.Where(n =>
+{
+    Console.WriteLine($"  test de {n.Prenom} ({n.Matiere}) : {n.Valeur}");
+    return n.Valeur >= 15;
 });
-
-notes.RemoveAll(n => n.Matiere == "Reseau");
-
-// 1.3 La capture de variables 
-
-//double seuil = 12;
-//Func<Note, bool> admis = n => n.Valeur >= seuil;
-//Console.WriteLine(Filtrer(notes, admis).Count);
-//seuil = 15;
-//Console.WriteLine(Filtrer(notes, admis).Count);
-
-
-//2. Premières requêtes
-
-////2.1 Filtrer, projeter, trier 
-
-//// 1. Les notes d’Algo, triées par valeur décroissante. 
-
-//var noteAlgo = notes
-//                .Where(n => n.Matiere == "Algo")
-//                .OrderByDescending(n => n.Valeur)
-//                .ToList();
-
-////2. La liste des matières, sans doublon et triée. 
-//var matieresSansDoublon = notes
-//                 .Select(n => n.Matiere)
-//                 .Distinct()
-//                 .Order()
-//                 .ToList();
-
-////3. Le prénom et la valeur de chaque note sous la note éliminatoire de 10
-
-//var etudiantEnDessousDe10 = notes
-//                            .Where(n => n.Valeur < 10)
-//                            .Select(new { n => n.Prenom, n.Valeur })
-//                            .ToList();
-//// Version avec Tuple
-//var etudiantEnDessousDe10Tuple = notes
-//                            .Where(n => n.Valeur < 10)
-//                            .Select(n => (n.Prenom, n.Valeur))
-//                            .ToList();
-
-////4. Le classement complet : par matière, puis par valeur décroissante, puis par prénom.
-//var classementComplet = notes
-//                        .orderBy(n => n.Matiere)
-//                        .orderByDescending(n => n.Valeur)
-//                        .orderBy(n => n.Prenom)
-//                        .ToList();
-
-
-////Correction avec ThenBy
-
-//var classementCompletAvecThen = notes
-//                        .orderBy(n => n.Matiere)
-//                        .thenByDescending(n => n.Valeur)
-//                        .thenBy(n => n.Prenom)
-//                        .ToList();
-
-
-//// 5. Les trois meilleures notes, toutes matières confondues 
-
-//var troisMeilleurNotes = notes 
-//                        .OrderByDescending(n => n.Valeur)
-//                        .Take(3)
-//                        .ToList();
-
-//// les notes de la 4e à la 6e place (Skip et Take). 
-//var quatreAsixemeNote = notes
-//                       .OrderByDescending(n => n.Valeur)
-//                       .Skip(3)
-//                       .Take(3)
-//                       .ToList();
-
-
-//// 2.2 Agréger
-
-//// 1. Le nombre de notes.
-//var nbNotes = notes.Count();
-
-//// le nombre de notes inférieures à 10,
-//var nbNotesInferDix = notes.Count(n => n.Valeur < 10);
-
-//// la moyenne simple de toutes les notes.
-//var moyenneNotes = notes.Average(n => n.Valeur);
-
-// // 2.La meilleure note avec Max, p
-//double meilleurNote = notes.Max(n => n.Valeur);
-//Console.WriteLine($"Meilleur note : {meilleurNote} ");
-
-//// Note complète 
-//Note noteComplete = notes.MaxBy(n => n.Valeur)!;
-//Console.WriteLine($"Note complète : {noteComplete} ");
-
-
-//// 3. La moyenne pondérée de toutes les notes : somme des valeurs × coefficients divisée par la somme des coefficients. 
-
-//double ponderee = notes.Sum(n => n.Valeur * n.Coef) / notes.Sum(n => n.Coef);
-//Console.WriteLine($"Moyenne pondere : {ponderee} ");
-
-////4 . La chaîne « Ada, Alan, Grace, Linus, Barbara » (prénoms distincts, dans l’ordre du fichier) avec aggregate 
-//string liste = notes.Select(n => n.Prenom).Distinct().Aggregate((acc, nom) => acc + ", " + nom);
-
-//foreach (var l in liste)
-//{
-//    Console.Write(l);
-//}
-
-//// version striing.join
-//string listeAvecJoin = string.Join(", ", notes.Select(n => n.Prenom).Distinct());
-
-
-////  2.3 Chercher et tester 
-
-//// 1. La note de Linus en BD avec FirstOrDefault. 
-//var noteLinusBd = notes.FirstOrDefault(n => n.Prenom == "Linus" && n.Matiere == "BD");
-//Console.WriteLine($"FirstOrDefault (Linus en BD) : {(noteLinusBd is null ? "null (aucune note)" : noteLinusBd)}");
-
-//try
-//{
-//    var noteLinusBdFirst = notes.First(n => n.Prenom == "Linus" && n.Matiere == "BD");
-//    Console.WriteLine($"First (Linus en BD) : {noteLinusBdFirst}");
-//}
-//catch (InvalidOperationException ex)
-//{
-//    Console.WriteLine($"First a levé une exception : {ex.Message}");
-//}
-
-//// 2. La note d’Ada en Algo avec Single.
-
-//var noteAdaAlgo = notes.Single(n => n.Prenom == "Ada" && n.Matiere == "Algo");
-//Console.WriteLine($"Single (Ada en Algo) : {noteAdaAlgo}");
-
-//try
-//{
-//    var notesAda = notes.Single(n => n.Prenom == "Ada");
-//    Console.WriteLine($"Single (toutes les notes d'Ada) : {notesAda}");
-//}
-//catch (InvalidOperationException ex)
-//{
-//    Console.WriteLine($"Single (Ada) a levé une exception : {ex.Message}");
-//}
-
-//// 3. Existe-t-il une note inférieure à 10 ?
-//bool existeSous10 = notes.Any(n => n.Valeur < 10);
-//Console.WriteLine($"Existe-t-il une note < 10 ? {existeSous10}");
-
-//bool tousAuMoins12EnBd = notes
-//    .Where(n => n.Matiere == "BD")
-//    .All(n => n.Valeur >= 12);
-//Console.WriteLine($"Tous au moins 12 en BD ? {tousAuMoins12EnBd}");
-
-//// Test de All sur une séquence vide
-//bool allSurVide = Enumerable.Empty<Note>().All(n => n.Valeur >= 12);
-//Console.WriteLine($"All sur une séquence vide : {allSurVide}");
-
-
-// 3. Regrouper et joindre 
-
-//// 3.1 GroupBy 
-
-//// 1. Regroupez les notes par matière 
-
-//var groupesParMatiere = notes.GroupBy(n => n.Matiere);
-
-//foreach (var groupe in groupesParMatiere)
-//{
-//    Console.WriteLine($"=== Matière : {groupe.Key} ===");
-//    foreach (var note in groupe)
-//    {
-//        Console.WriteLine($"  - {note.Prenom} : {note.Valeur} (coef {note.Coef})");
-//    }
-//}
-
-//// 2. Statistique
-
-//var statsParMatiere = notes
-//    .GroupBy(n => n.Matiere)
-//    .Select(g => new
-//    {
-//        Matiere = g.Key,
-//        NbNotes = g.Count(),
-//        Moyenne = g.Average(n => n.Valeur),
-//        Min = g.Min(n => n.Valeur),
-//        Max = g.Max(n => n.Valeur),
-//        Major = g.MaxBy(n => n.Valeur)!.Prenom
-//    })
-//    .OrderByDescending(s => s.Moyenne);
-
-//foreach (var s in statsParMatiere)
-//{
-//    Console.WriteLine($"{s.Matiere} : {s.NbNotes} notes | Moy: {s.Moyenne:F2} | Min: {s.Min} | Max: {s.Max} | Major: {s.Major}");
-//}
-
-
-//// 3. Calculez la moyenne pondérée
-
-//Dictionary<string, double> moyennesEtudiants = notes
-//    .GroupBy(n => n.Prenom)
-//    .ToDictionary(
-//        g => g.Key,
-//        g => g.Sum(n => n.Valeur * n.Coef) / g.Sum(n => n.Coef)
-//    );
-
-//foreach (var (prenom, moyenne) in moyennesEtudiants)
-//{
-//    Console.WriteLine($"{prenom} : moyenne pondérée = {moyenne:F2}");
-//}
-
-
-
-//// 4. Comptez les notes par étudiant avec CountBy
-
-//// Version .NET 9 avec CountBy
-//var nbNotesCountBy = notes.CountBy(n => n.Prenom);
-
-//Console.WriteLine("--- Avec CountBy ---");
-//foreach (var (prenom, nb) in nbNotesCountBy)
-//{
-//    Console.WriteLine($"{prenom} : {nb} notes");
-//}
-
-//// Version avec GroupBy et Count
-//var nbNotesGroupBy = notes
-//    .GroupBy(n => n.Prenom)
-//    .Select(g => (Prenom: g.Key, Nb: g.Count()));
-
-//Console.WriteLine("--- Avec GroupBy et Count ---");
-//foreach (var item in nbNotesGroupBy)
-//{
-//    Console.WriteLine($"{item.Prenom} : {item.Nb} notes");
-//}
-
-
-//// 3.2 Join 
-
-//// 1. Jointure avec clé composite 
-
-//var releve = notes.Join(
-//    inscrits,
-//    n => (n.Nom, n.Prenom),          // Clé côté notes (tuple)
-//    i => (i.Nom, i.Prenom),          // Clé côté inscrits (tuple)
-//    (n, i) => new { i.Prenom, i.Promo, n.Matiere, n.Valeur }
-//).ToList();
-
-//Console.WriteLine("=== Relevé complet ===");
-//foreach (var r in releve)
-//{
-//    Console.WriteLine($"{r.Prenom} ({r.Promo}) - {r.Matiere} : {r.Valeur}");
-//}
-
-//// 2. Moyenne simple par promo
-
-//var moyennesParPromo = releve
-//    .GroupBy(r => r.Promo)
-//    .Select(g => new
-//    {
-//        Promo = g.Key,
-//        Moyenne = g.Average(r => r.Valeur)
-//    });
-
-//Console.WriteLine("\n=== Moyenne par promo ===");
-//foreach (var p in moyennesParPromo)
-//{
-//    Console.WriteLine($"{p.Promo} : {p.Moyenne:F2}");
-//}
-
-//// 3. Trouvez les inscrits sans aucune note
-
-//// Méthode : Where + Any
-//var sansNoteWhere = inscrits
-//    .Where(i => !notes.Any(n => n.Nom == i.Nom && n.Prenom == i.Prenom));
-
-//Console.WriteLine("\n=== Sans note (Where + Any) ===");
-//foreach (var i in sansNoteWhere)
-//{
-//    Console.WriteLine($"{i.Prenom} {i.Nom} ({i.Promo})");
-//}
-
-//// Méthode  : GroupJoin 
-//var sansNoteGroupJoin = inscrits
-//    .GroupJoin(
-//        notes,
-//        i => (i.Nom, i.Prenom),
-//        n => (n.Nom, n.Prenom),
-//        (i, notesEtudiant) => new { Inscrit = i, Notes = notesEtudiant }
-//    )
-//    .Where(x => !x.Notes.Any())
-//    .Select(x => x.Inscrit);
-
-//Console.WriteLine("\n=== Sans note (GroupJoin) ===");
-//foreach (var i in sansNoteGroupJoin)
-//{
-//    Console.WriteLine($"{i.Prenom} {i.Nom} ({i.Promo})");
-//}
-
-//// 4. Index avec ToLookup
-
-//ILookup<string, Note> indexNotes = notes.ToLookup(n => n.Prenom);
-
-//Console.WriteLine("\n=== Notes de Grace ===");
-//foreach (var n in indexNotes["Grace"])
-//{
-//    Console.WriteLine($"{n.Matiere} : {n.Valeur} (coef {n.Coef})");
-//}
-
-//// Test avec un prénom absent
-//var notesAbsent = indexNotes["Margaret"];
-//Console.WriteLine($"\nNombre de notes pour Margaret : {notesAbsent.Count()}");
-
-
-//// 3.3 SelectMany
-
-//// 1. Construisez la liste des bulletins à partir des notes (GroupBy puis Select). 
-
-//List<Bulletin> bulletins = notes
-//    .GroupBy(n => n.Prenom)
-//    .Select(g => new Bulletin(g.Key, g.Select(n => n.Valeur).ToList()))
-//    .ToList();
-
-//Console.WriteLine("=== Bulletins ===");
-//foreach (var b in bulletins)
-//{
-//    Console.WriteLine($"{b.Prenom} : [{string.Join(", ", b.Valeurs)}]");
-//}
-
-////2. Retrouvez la liste « à plat » de toutes les valeurs avec SelectMany. 
-
-//// Avec SelectMany : une seule liste plate de doubles
-//IEnumerable<double> toutesLesValeurs = bulletins.SelectMany(b => b.Valeurs);
-
-//Console.WriteLine("\n=== Toutes les valeurs à plat (SelectMany) ===");
-//Console.WriteLine(string.Join(", ", toutesLesValeurs));
-
-//// Comparaison avec Select (pour observer le type)
-//IEnumerable<List<double>> listesDeValeurs = bulletins.Select(b => b.Valeurs);
-
-//// 3. Avec la seconde forme de SelectMany, produisez des paires (prénom, valeur). 
-
-//var paires = bulletins.SelectMany(
-//    b => b.Valeurs,                                  // 1. Quelle sous-collection aplatir
-//    (bulletin, valeur) => (bulletin.Prenom, valeur)  // 2. Comment combiner le parent et chaque élément
-//);
-
-//Console.WriteLine("\n=== Paires (Prénom, Valeur) ===");
-//foreach (var (prenom, valeur) in paires)
-//{
-//    Console.WriteLine($"{prenom} -> {valeur}");
-//}
-
-//// 4. L’évaluation différée
-
-
-//// Affiche toute les notes supérieur ou égal à 15
-//var bonnes = notes.Where(n => n.Valeur >= 15);
-//Console.WriteLine(bonnes.Count());
-
-
-//// On ajoute une note à Hamilton une note de 19 en algo coef 3. On reaffiche le nombre de note supérieur ou égal à 15
-//notes.Add(new Note("Hamilton", "Margaret", "Algo", 19, 3));
-//Console.WriteLine(bonnes.Count());
-
-///*
-// * On crééer une liste qui stock les notes supérieur ou égal à 15
-// * Ensuite on à ajoute à la liste des notes une nouvelle note qui est un 20 à Hamilton dans la matière BD coef 2
-// *  A la fin on voit la comparaison  de  la liste bonne et la liste figee on voit que la nouvelle de note hamilton à été pris en compte dans la liste bonnes mais dans  figee
-
-// */
-
-//var figees = notes.Where(n => n.Valeur >= 15).ToList();
-//notes.Add(new Note("Hamilton", "Margaret", "BD", 20, 2));
-//Console.WriteLine(bonnes.Count() + " / " + figees.Count);
-
-////2. Ajoutez un effet de bord 
-
-//Console.WriteLine("\n=== Sans ToList (2 appels à Count) ===");
-//var bonnesTrace = notes.Where(n =>
-//{
-//    Console.WriteLine($"  test de {n.Prenom} ({n.Matiere}) : {n.Valeur}");
-//    return n.Valeur >= 15;
-//});
-
-//Console.WriteLine($"Count 1 : {bonnesTrace.Count()}");
-//Console.WriteLine($"Count 2 : {bonnesTrace.Count()}");
-
-//Console.WriteLine("\n=== Avec ToList d'abord ===");
-//var bonnesFigees = notes.Where(n =>
-//{
-//    Console.WriteLine($"  test de {n.Prenom} ({n.Matiere}) : {n.Valeur}");
-//    return n.Valeur >= 15;
-//}).ToList();
-
-//Console.WriteLine($"Count 1 : {bonnesFigees.Count}");
-//Console.WriteLine($"Count 2 : {bonnesFigees.Count}");
-
-//// 3. Remplacez Count() > 0 par Any() dans le même montage.
-
-//Console.WriteLine("\n=== Test avec Count() > 0 ===");
-//bool avecCount = bonnesTrace.Count() > 0;
-//Console.WriteLine($"Résultat Count() > 0 : {avecCount}");
-
-//Console.WriteLine("\n=== Test avec Any() ===");
-//bool avecAny = bonnesTrace.Any();
-//Console.WriteLine($"Résultat Any() : {avecAny}");
-
-//// 4. Placez le Where avant puis après un OrderBy dans une même requête. 
-
-//Console.WriteLine("\n=== Where AVANT OrderBy ===");
-//int nbTriesAvant = 0;
-//var resAvant = notes
-//    .Where(n => n.Valeur >= 15)
-//    .OrderBy(n =>
-//    {
-//        nbTriesAvant++;
-//        return n.Valeur;
-//    })
-//    .ToList();
-//Console.WriteLine($"Notes passées par le tri : {nbTriesAvant}");
-
-//Console.WriteLine("\n=== Where APRÈS OrderBy ===");
-//int nbTriesApres = 0;
-//var resApres = notes
-//    .OrderBy(n =>
-//    {
-//        nbTriesApres++;
-//        return n.Valeur;
-//    })
-//    .Where(n => n.Valeur >= 15)
-//    .ToList();
-//Console.WriteLine($"Notes passées par le tri : {nbTriesApres}");
-
-// 5. Réécrire la classe Promo 
+bool avecAny = bonnesTrace.Any(); // Ne teste qu'1 seul élément puis s'arrête
+
+// 4. Where avant OrderBy (trie 6 notes) vs Where après OrderBy (trie les 13 notes)
+var resAvant = notes.Where(n => n.Valeur >= 15).OrderBy(n => n.Valeur).ToList();
+var resApres = notes.OrderBy(n => n.Valeur).Where(n => n.Valeur >= 15).ToList();
+*/
+
+// ============================================================================
+// EXERCICE 5 : Réécrire la classe Promo en expressions LINQ
+// ============================================================================
+Console.WriteLine("\n===== EXERCICE 5 : Classe Promo en LINQ =====");
 
 var promo = new Promo("M1 Info", notes);
 
