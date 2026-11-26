@@ -287,7 +287,7 @@ var resApres = notes.OrderBy(n => n.Valeur).Where(n => n.Valeur >= 15).ToList();
 */
 
 // ============================================================================
-// EXERCICE 5 : Réécrire la classe Promo en expressions LINQ
+// EXERCICE 5 : Réécrire la classe Promo en expressions LINQ.
 // ============================================================================
 Console.WriteLine("\n===== EXERCICE 5 : Classe Promo en LINQ =====");
 
