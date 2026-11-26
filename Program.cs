@@ -306,7 +306,7 @@ foreach (var (matiere, nb) in promo.NbAdmisParMatiere())
     Console.WriteLine($"{matiere} : {nb} admis");
 }
 
-Console.WriteLine("\n--- Relevé ---");
+Console.WriteLine("\n--- Relevé ----");
 foreach (var ligne in promo.Releve())
 {
     Console.WriteLine(ligne);
